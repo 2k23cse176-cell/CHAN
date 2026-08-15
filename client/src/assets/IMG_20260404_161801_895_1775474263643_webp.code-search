@@ -1,0 +1,14 @@
+# Query: IMG_20260404_161801_895_1775474263643.webp
+# ContextLines: 1
+
+2 results - 2 files
+
+client\src\components\app-sidebar.tsx:
+  32  import { useQuery } from "@tanstack/react-query";
+  33: import newLogoPath from "@assets/v";
+  34  
+
+client\src\pages\login.tsx:
+  5  import { queryClient } from "@/lib/queryClient";
+  6: import logoPath from "@assets/IMG_20260404_161801_895_1775474263643.webp";
+  7  import loginErrorSound from "@assets/login-error_1771588547644.mp3";
