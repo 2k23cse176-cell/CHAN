@@ -1,11 +1,9 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import logoPath from "@assets/chan-corp-logo-white.png";
-import loginErrorSound from "@assets/login-error_1771588547644.mp3";
-import loginSuccessSound from "@assets/ElevenLabs_2026_02_20T12_28_13_Gojo_Calm,_Clear_and_Measured_p_1771590685418.mp3";
 
 // Fixed starfield — generated once at module load so it never reshuffles on re-render.
 const STARS = Array.from({ length: 70 }).map((_, i) => {
@@ -31,23 +29,13 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showProgressBar, setShowProgressBar] = useState(false);
-  const errorAudioRef = useRef<HTMLAudioElement | null>(null);
-  const successAudioRef = useRef<HTMLAudioElement | null>(null);
 
   function playErrorSound() {
-    try {
-      if (!errorAudioRef.current) errorAudioRef.current = new Audio(loginErrorSound);
-      errorAudioRef.current.currentTime = 0;
-      errorAudioRef.current.play().catch(() => {});
-    } catch {}
+    // Audio files were not included in the deploy repo. Intentionally no-op to keep build and runtime safe.
   }
 
   function playSuccessSound() {
-    try {
-      if (!successAudioRef.current) successAudioRef.current = new Audio(loginSuccessSound);
-      successAudioRef.current.currentTime = 0;
-      successAudioRef.current.play().catch(() => {});
-    } catch {}
+    // Audio files were not included in the deploy repo. Intentionally no-op to keep build and runtime safe.
   }
 
   async function handleSubmit(e: React.FormEvent) {
