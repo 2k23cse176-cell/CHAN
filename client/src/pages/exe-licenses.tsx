@@ -37,12 +37,13 @@ import { Trash2, Plus, Copy, Check } from "lucide-react";
 
 interface ExeLicense {
   id: string;
-  exeName: string;
-  apiKey: string;
-  daysValid: number;
+  licenseKey: string;
   expiresAt: string;
-  lastConnectedAt: string | null;
+  maxUses: number;
+  usedCount: number;
+  note: string;
   status: string;
+  lastUsedAt: string | null;
   createdAt: string;
 }
 
@@ -53,11 +54,12 @@ export default function ExeLicensesPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [formData, setFormData] = useState({
-    exeName: "",
-    daysValid: 30,
+    expiresAt: "",
+    maxUses: 0,
+    note: "",
   });
 
-  // Fetch EXE licenses
+  // Fetch licenses
   const { data: licenses, isLoading, refetch } = useQuery({
     queryKey: ["exe-licenses"],
     queryFn: async () => {
@@ -66,25 +68,29 @@ export default function ExeLicensesPage() {
     },
   });
 
-  // Create EXE license
+  // Create license
   const createMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
       const res = await apiRequest("/api/exe-licenses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          expiresAt: new Date(data.expiresAt),
+          maxUses: parseInt(String(data.maxUses)) || 0,
+          note: data.note,
+        }),
       });
       if (!res.ok) throw new Error("Failed to create license");
       return res.json();
     },
     onSuccess: (newLicense) => {
       toast({
-        title: "✅ EXE License Created",
-        description: `API Key: ${newLicense.apiKey}`,
+        title: "✅ License Created",
+        description: `Key: ${newLicense.licenseKey}`,
       });
       queryClient.invalidateQueries({ queryKey: ["exe-licenses"] });
       setOpenDialog(false);
-      setFormData({ exeName: "", daysValid: 30 });
+      setFormData({ expiresAt: "", maxUses: 0, note: "" });
       refetch();
     },
     onError: (error) => {
@@ -96,7 +102,7 @@ export default function ExeLicensesPage() {
     },
   });
 
-  // Delete EXE license
+  // Delete license
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const res = await apiRequest(`/api/exe-licenses/${id}`, {
@@ -134,14 +140,6 @@ export default function ExeLicensesPage() {
       month: "short",
       day: "numeric",
       year: "numeric",
-    });
-  };
-
-  const formatTime = (dateString: string | null) => {
-    if (!dateString) return "Never";
-    return new Date(dateString).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
       hour: "2-digit",
       minute: "2-digit",
     });
@@ -153,12 +151,19 @@ export default function ExeLicensesPage() {
     return "default";
   };
 
+  const daysUntilExpiry = (expiresAt: string) => {
+    const diff = new Date(expiresAt).getTime() - new Date().getTime();
+    if (diff <= 0) return "Expired";
+    const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+    return `${days}d`;
+  };
+
   if (!isAdmin) {
     return (
       <div className="p-6">
         <Card className="p-8 text-center">
           <p className="text-muted-foreground">
-            Only administrators can manage EXE licenses
+            Only administrators can manage licenses
           </p>
         </Card>
       </div>
@@ -172,7 +177,7 @@ export default function ExeLicensesPage() {
         <div>
           <h1 className="text-3xl font-bold">EXE Licenses</h1>
           <p className="text-sm text-muted-foreground">
-            Manage API keys for your desktop applications
+            Create and manage license keys for your applications
           </p>
         </div>
         <Button onClick={() => setOpenDialog(true)} className="gap-2">
@@ -182,7 +187,7 @@ export default function ExeLicensesPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="p-4">
           <div className="text-sm text-muted-foreground">Total Licenses</div>
           <div className="text-2xl font-bold">{licenses?.length || 0}</div>
@@ -203,6 +208,12 @@ export default function ExeLicensesPage() {
               .length || 0}
           </div>
         </Card>
+        <Card className="p-4">
+          <div className="text-sm text-muted-foreground">Total Uses</div>
+          <div className="text-2xl font-bold">
+            {licenses?.reduce((sum, l) => sum + l.usedCount, 0) || 0}
+          </div>
+        </Card>
       </div>
 
       {/* Licenses Table */}
@@ -211,10 +222,12 @@ export default function ExeLicensesPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>EXE Name</TableHead>
-                <TableHead>API Key</TableHead>
+                <TableHead>License Key</TableHead>
                 <TableHead>Expires</TableHead>
-                <TableHead>Last Connected</TableHead>
+                <TableHead>Days Left</TableHead>
+                <TableHead>Max Uses</TableHead>
+                <TableHead>Used</TableHead>
+                <TableHead>Last Used</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -222,27 +235,24 @@ export default function ExeLicensesPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={6}>
+                  <TableCell colSpan={8}>
                     <Skeleton className="h-12" />
                   </TableCell>
                 </TableRow>
               ) : licenses && licenses.length > 0 ? (
                 licenses.map((license) => (
                   <TableRow key={license.id}>
-                    <TableCell className="font-medium">
-                      {license.exeName}
-                    </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <code className="text-xs bg-muted px-2 py-1 rounded">
-                          {license.apiKey.slice(0, 12)}...
+                        <code className="text-xs bg-muted px-2 py-1 rounded font-mono">
+                          {license.licenseKey}
                         </code>
                         <button
-                          onClick={() => handleCopyKey(license.apiKey)}
+                          onClick={() => handleCopyKey(license.licenseKey)}
                           className="hover:opacity-70"
-                          title="Copy full key"
+                          title="Copy license key"
                         >
-                          {copiedKey === license.apiKey ? (
+                          {copiedKey === license.licenseKey ? (
                             <Check className="h-4 w-4 text-green-600" />
                           ) : (
                             <Copy className="h-4 w-4" />
@@ -250,9 +260,20 @@ export default function ExeLicensesPage() {
                         </button>
                       </div>
                     </TableCell>
-                    <TableCell>{formatDate(license.expiresAt)}</TableCell>
+                    <TableCell className="text-sm">
+                      {formatDate(license.expiresAt)}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {daysUntilExpiry(license.expiresAt)}
+                    </TableCell>
+                    <TableCell>
+                      {license.maxUses === 0 ? "∞" : license.maxUses}
+                    </TableCell>
+                    <TableCell>{license.usedCount}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {formatTime(license.lastConnectedAt)}
+                      {license.lastUsedAt
+                        ? formatDate(license.lastUsedAt)
+                        : "Never"}
                     </TableCell>
                     <TableCell>
                       <Badge
@@ -279,9 +300,9 @@ export default function ExeLicensesPage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8">
+                  <TableCell colSpan={8} className="text-center py-8">
                     <p className="text-muted-foreground">
-                      No EXE licenses yet. Create one to get started.
+                      No licenses yet. Create one to get started.
                     </p>
                   </TableCell>
                 </TableRow>
@@ -299,33 +320,45 @@ export default function ExeLicensesPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium">EXE Name *</label>
+              <label className="text-sm font-medium">Expiry Date *</label>
               <Input
-                placeholder="e.g., game.exe"
-                value={formData.exeName}
+                type="datetime-local"
+                value={formData.expiresAt}
                 onChange={(e) =>
-                  setFormData({ ...formData, exeName: e.target.value })
+                  setFormData({ ...formData, expiresAt: e.target.value })
                 }
               />
+              <p className="text-xs text-muted-foreground mt-1">
+                When this license should expire
+              </p>
             </div>
             <div>
-              <label className="text-sm font-medium">Days Valid *</label>
+              <label className="text-sm font-medium">Max Uses (Optional)</label>
               <Input
                 type="number"
-                placeholder="30"
-                value={formData.daysValid}
+                placeholder="0 = unlimited"
+                value={formData.maxUses}
                 onChange={(e) =>
                   setFormData({
                     ...formData,
-                    daysValid: parseInt(e.target.value) || 30,
+                    maxUses: parseInt(e.target.value) || 0,
                   })
                 }
-                min="1"
-                max="365"
+                min="0"
               />
               <p className="text-xs text-muted-foreground mt-1">
-                License will expire after {formData.daysValid} days
+                Maximum number of EXEs that can use this key (0 = unlimited)
               </p>
+            </div>
+            <div>
+              <label className="text-sm font-medium">Note (Optional)</label>
+              <Input
+                placeholder="e.g., customer name or project"
+                value={formData.note}
+                onChange={(e) =>
+                  setFormData({ ...formData, note: e.target.value })
+                }
+              />
             </div>
           </div>
           <DialogFooter>
@@ -334,7 +367,7 @@ export default function ExeLicensesPage() {
             </Button>
             <Button
               onClick={() => createMutation.mutate(formData)}
-              disabled={!formData.exeName || createMutation.isPending}
+              disabled={!formData.expiresAt || createMutation.isPending}
             >
               {createMutation.isPending ? "Creating..." : "Create License"}
             </Button>
@@ -348,8 +381,8 @@ export default function ExeLicensesPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete License?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will revoke the EXE license and prevent the application from
-              connecting. This action cannot be undone.
+              This will revoke the license key and prevent EXEs from connecting.
+              This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

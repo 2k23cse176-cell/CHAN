@@ -145,12 +145,12 @@ export interface IStorage {
   spendCredits(accountId: string, credits: number): Promise<Account | undefined>;
 
   getExeLicense(id: string): Promise<ExeLicense | undefined>;
-  getExeLicenseByKey(apiKey: string): Promise<ExeLicense | undefined>;
+  getExeLicenseByKey(licenseKey: string): Promise<ExeLicense | undefined>;
   getExeLicensesBySeller(sellerId: string): Promise<ExeLicense[]>;
   createExeLicense(data: InsertExeLicense): Promise<ExeLicense>;
   updateExeLicense(id: string, data: Partial<ExeLicense>): Promise<ExeLicense | undefined>;
   deleteExeLicense(id: string): Promise<void>;
-  validateExeLicense(apiKey: string): Promise<{ valid: boolean; exeName?: string }>;
+  validateExeLicense(licenseKey: string): Promise<{ valid: boolean }>;
   updateExeLicenseLastConnected(id: string): Promise<void>;
 }
 
@@ -559,8 +559,8 @@ export class DatabaseStorage implements IStorage {
     return lic;
   }
 
-  async getExeLicenseByKey(apiKey: string): Promise<ExeLicense | undefined> {
-    const [lic] = await db.select().from(exeLicenses).where(eq(exeLicenses.apiKey, apiKey));
+  async getExeLicenseByKey(licenseKey: string): Promise<ExeLicense | undefined> {
+    const [lic] = await db.select().from(exeLicenses).where(eq(exeLicenses.licenseKey, licenseKey));
     return lic;
   }
 
@@ -569,9 +569,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createExeLicense(data: InsertExeLicense): Promise<ExeLicense> {
-    const apiKey = "exe_" + generateSecret().substring(0, 48);
-    const expiresAt = new Date(Date.now() + (data.daysValid || 30) * 86400000);
-    const [lic] = await db.insert(exeLicenses).values({ ...data, apiKey, expiresAt }).returning();
+    const licenseKey = "EXE-" + generateSecret().substring(0, 48).toUpperCase();
+    const [lic] = await db.insert(exeLicenses).values({ ...data, licenseKey }).returning();
     return lic;
   }
 
@@ -584,16 +583,19 @@ export class DatabaseStorage implements IStorage {
     await db.delete(exeLicenses).where(eq(exeLicenses.id, id));
   }
 
-  async validateExeLicense(apiKey: string): Promise<{ valid: boolean; exeName?: string }> {
-    const [lic] = await db.select().from(exeLicenses).where(eq(exeLicenses.apiKey, apiKey));
+  async validateExeLicense(licenseKey: string): Promise<{ valid: boolean }> {
+    const [lic] = await db.select().from(exeLicenses).where(eq(exeLicenses.licenseKey, licenseKey));
     if (!lic) return { valid: false };
     if (lic.status !== "active") return { valid: false };
     if (new Date() > lic.expiresAt) return { valid: false };
-    return { valid: true, exeName: lic.exeName };
+    // Check max uses if set (0 means unlimited)
+    if (lic.maxUses > 0 && lic.usedCount >= lic.maxUses) return { valid: false };
+    return { valid: true };
   }
 
   async updateExeLicenseLastConnected(id: string): Promise<void> {
-    await db.update(exeLicenses).set({ lastConnectedAt: new Date() }).where(eq(exeLicenses.id, id));
+    const { sql: drizzleSql } = await import("drizzle-orm");
+    await db.update(exeLicenses).set({ lastUsedAt: new Date(), usedCount: drizzleSql`${exeLicenses.usedCount} + 1` }).where(eq(exeLicenses.id, id));
   }
 }
 

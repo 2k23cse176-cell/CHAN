@@ -2017,13 +2017,13 @@ export async function registerRoutes(
 
   // ─── EXE LICENSE ROUTES ────────────────────────────────────────
   
-  // Create EXE license key (called by seller/admin from panel)
+  // Create EXE license (admin creates license with manual expiry)
   app.post("/api/exe-licenses", isLocalAuth, async (req: any, res) => {
     try {
-      const { exeName, daysValid } = req.body;
-      if (!exeName) return res.status(400).json({ message: "Exe name required" });
+      const { expiresAt, maxUses, note } = req.body;
+      if (!expiresAt) return res.status(400).json({ message: "Expiry date required" });
       
-      // Get account and first active seller
+      // Get account
       const account = await storage.getAccountByUsername(req.localUser.username);
       if (!account) return res.status(401).json({ message: "Account not found" });
       
@@ -2037,15 +2037,17 @@ export async function registerRoutes(
       // Create exe license
       const exeLic = await storage.createExeLicense({
         sellerId: targetSeller.id,
-        exeName,
-        daysValid: daysValid || 30,
+        expiresAt: new Date(expiresAt),
+        maxUses: maxUses || 0, // 0 = unlimited
+        note: note || "",
       });
       
       res.json({ 
         id: exeLic.id, 
-        exeName: exeLic.exeName, 
-        apiKey: exeLic.apiKey,
+        licenseKey: exeLic.licenseKey,
         expiresAt: exeLic.expiresAt,
+        maxUses: exeLic.maxUses,
+        usedCount: exeLic.usedCount,
         status: exeLic.status,
       });
     } catch (err) {
@@ -2054,7 +2056,7 @@ export async function registerRoutes(
     }
   });
 
-  // List EXE licenses for a seller (for panel)
+  // List EXE licenses
   app.get("/api/exe-licenses", isLocalAuth, async (req: any, res) => {
     try {
       // Get account
@@ -2086,16 +2088,16 @@ export async function registerRoutes(
     }
   });
 
-  // Validate EXE API key (called by EXE on startup)
-  app.post("/api/validate-exe", async (req, res) => {
+  // Validate EXE license (called by EXE on startup - NO AUTH REQUIRED)
+  app.post("/api/validate-license", async (req, res) => {
     try {
-      const { apiKey } = req.body;
-      if (!apiKey) return res.status(400).json({ success: false, message: "API key required" });
+      const { licenseKey } = req.body;
+      if (!licenseKey) return res.status(400).json({ success: false, message: "License key required" });
       
-      const result = await storage.validateExeLicense(apiKey);
+      const result = await storage.validateExeLicense(licenseKey);
       if (result.valid) {
-        // Update last connected time
-        const lic = await storage.getExeLicenseByKey(apiKey);
+        // Update last used time
+        const lic = await storage.getExeLicenseByKey(licenseKey);
         if (lic) {
           await storage.updateExeLicenseLastConnected(lic.id);
         }
@@ -2103,7 +2105,7 @@ export async function registerRoutes(
       
       res.json(result);
     } catch (err) {
-      console.error("Validate exe error:", err);
+      console.error("Validate license error:", err);
       res.status(500).json({ success: false, message: "Validation failed" });
     }
   });

@@ -149,12 +149,13 @@ export const exeLicenses = pgTable(
     sellerId: varchar("seller_id")
       .notNull()
       .references(() => sellers.id, { onDelete: "cascade" }),
-    exeName: text("exe_name").notNull(),
-    apiKey: text("api_key").notNull().unique(),
-    daysValid: integer("days_valid").notNull().default(30),
+    licenseKey: text("license_key").notNull().unique(),
     expiresAt: timestamp("expires_at").notNull(),
-    lastConnectedAt: timestamp("last_connected_at"),
+    maxUses: integer("max_uses").default(0), // 0 = unlimited
+    usedCount: integer("used_count").default(0),
+    note: text("note"),
     status: varchar("status", { length: 20 }).notNull().default("active"),
+    lastUsedAt: timestamp("last_used_at"),
     createdAt: timestamp("created_at").defaultNow(),
   },
   (table) => [index("idx_exe_license_seller").on(table.sellerId)]
@@ -209,9 +210,9 @@ export const insertAppFileSchema = createInsertSchema(appFiles).omit({
 
 export const insertExeLicenseSchema = createInsertSchema(exeLicenses).omit({
   id: true,
-  apiKey: true,
-  expiresAt: true,
-  lastConnectedAt: true,
+  licenseKey: true,
+  usedCount: true,
+  lastUsedAt: true,
   createdAt: true,
 });
 
