@@ -15,6 +15,7 @@ import {
   ShoppingBag,
   UserCircle,
   Clock,
+  Monitor,
 } from "lucide-react";
 import {
   Sidebar,
@@ -139,6 +140,7 @@ export function AppSidebar() {
               <SidebarMenu>
                 {renderItem("Applications", "/dashboard/apps", AppWindow)}
                 {renderItem("Licenses", "/dashboard/licenses", Key)}
+                {renderItem("EXE Licenses", "/dashboard/exe-licenses", Monitor)}
                 {renderItem("App Users", "/dashboard/users", Users)}
                 {renderItem("Tokens", "/dashboard/tokens", Coins)}
               </SidebarMenu>

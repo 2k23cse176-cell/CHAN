@@ -14,6 +14,7 @@ import LoginPage from "@/pages/login";
 import DashboardPage from "@/pages/dashboard";
 import ManageAppsPage from "@/pages/manage-apps";
 import LicensesPage from "@/pages/licenses";
+import ExeLicensesPage from "@/pages/exe-licenses";
 import AppUsersPage from "@/pages/app-users";
 import TokensPage from "@/pages/tokens";
 import AppSettingsPage from "@/pages/app-settings";
@@ -138,6 +139,7 @@ function AuthenticatedApp() {
         <Route path="/dashboard" component={DashboardPage} />
         <Route path="/dashboard/apps" component={ManageAppsPage} />
         <Route path="/dashboard/licenses" component={LicensesPage} />
+        <Route path="/dashboard/exe-licenses" component={ExeLicensesPage} />
         <Route path="/dashboard/users" component={AppUsersPage} />
         <Route path="/dashboard/tokens" component={TokensPage} />
         <Route path="/dashboard/settings" component={AppSettingsPage} />
