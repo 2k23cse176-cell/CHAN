@@ -10,7 +10,7 @@ import fs from "fs";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { storage } from "./storage";
 import { users } from "@shared/models/auth";
-import { licenses as licensesTable, applications as applicationsTable } from "@shared/schema";
+import { licenses as licensesTable, applications as applicationsTable, sellers } from "@shared/schema";
 import { db } from "./db";
 
 let signingKeyPair: { publicKey: Uint8Array; privateKey: Uint8Array; keyType: string };
@@ -2020,17 +2020,23 @@ export async function registerRoutes(
   // Create EXE license key (called by seller/admin from panel)
   app.post("/api/exe-licenses", isLocalAuth, async (req: any, res) => {
     try {
-      const { appId, exeName, daysValid } = req.body;
+      const { exeName, daysValid } = req.body;
       if (!exeName) return res.status(400).json({ message: "Exe name required" });
       
-      // Get seller for this app
-      const sellers = await storage.getSellersByApp(appId);
-      const seller = sellers.find(s => s.enabled);
-      if (!seller) return res.status(403).json({ message: "No active seller for this app" });
+      // Get account and first active seller
+      const account = await storage.getAccountByUsername(req.localUser.username);
+      if (!account) return res.status(401).json({ message: "Account not found" });
+      
+      // Get any seller (if admin/superadmin, use first available)
+      const allSellers = await db.select().from(sellers);
+      let targetSeller = allSellers.find(s => s.enabled);
+      if (!targetSeller) {
+        return res.status(403).json({ message: "No active seller available" });
+      }
       
       // Create exe license
       const exeLic = await storage.createExeLicense({
-        sellerId: seller.id,
+        sellerId: targetSeller.id,
         exeName,
         daysValid: daysValid || 30,
       });
@@ -2051,18 +2057,25 @@ export async function registerRoutes(
   // List EXE licenses for a seller (for panel)
   app.get("/api/exe-licenses", isLocalAuth, async (req: any, res) => {
     try {
-      // Get all sellers this user has access to
+      // Get account
       const account = await storage.getAccountByUsername(req.localUser.username);
       if (!account) return res.status(401).json({ message: "Account not found" });
       
       const allLicenses: any[] = [];
-      // Admin/superadmin can see all, reseller sees their own
+      
+      // Admin/superadmin can see all licenses
       if (["admin", "superadmin"].includes(req.localUser.role)) {
-        // Get all app licenses for all sellers
-        const allSellers = await storage.getSellersByApp((req.query.appId || "") as string);
+        const allSellers = await db.select().from(sellers);
         for (const seller of allSellers) {
           const lics = await storage.getExeLicensesBySeller(seller.id);
           allLicenses.push(...lics.map(l => ({ ...l, sellerName: seller.name })));
+        }
+      } else {
+        // Resellers see their own licenses
+        const reseller = await storage.getReseller(account.id);
+        if (reseller) {
+          const lics = await storage.getExeLicensesBySeller(reseller.id);
+          allLicenses.push(...lics);
         }
       }
       
