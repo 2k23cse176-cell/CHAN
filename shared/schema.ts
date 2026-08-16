@@ -142,6 +142,24 @@ export const appFiles = pgTable("app_files", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const exeLicenses = pgTable(
+  "exe_licenses",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    sellerId: varchar("seller_id")
+      .notNull()
+      .references(() => sellers.id, { onDelete: "cascade" }),
+    exeName: text("exe_name").notNull(),
+    apiKey: text("api_key").notNull().unique(),
+    daysValid: integer("days_valid").notNull().default(30),
+    expiresAt: timestamp("expires_at").notNull(),
+    lastConnectedAt: timestamp("last_connected_at"),
+    status: varchar("status", { length: 20 }).notNull().default("active"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [index("idx_exe_license_seller").on(table.sellerId)]
+);
+
 export const insertApplicationSchema = createInsertSchema(applications).omit({
   id: true,
   secret: true,
@@ -189,6 +207,14 @@ export const insertAppFileSchema = createInsertSchema(appFiles).omit({
   updatedAt: true,
 });
 
+export const insertExeLicenseSchema = createInsertSchema(exeLicenses).omit({
+  id: true,
+  apiKey: true,
+  expiresAt: true,
+  lastConnectedAt: true,
+  createdAt: true,
+});
+
 export type Application = typeof applications.$inferSelect;
 export type InsertApplication = z.infer<typeof insertApplicationSchema>;
 export type License = typeof licenses.$inferSelect;
@@ -205,3 +231,5 @@ export type Announcement = typeof announcements.$inferSelect;
 export type InsertAnnouncement = z.infer<typeof insertAnnouncementSchema>;
 export type AppFile = typeof appFiles.$inferSelect;
 export type InsertAppFile = z.infer<typeof insertAppFileSchema>;
+export type ExeLicense = typeof exeLicenses.$inferSelect;
+export type InsertExeLicense = z.infer<typeof insertExeLicenseSchema>;

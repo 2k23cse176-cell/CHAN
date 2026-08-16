@@ -10,6 +10,7 @@ import {
   chatMessages,
   announcements,
   appFiles,
+  exeLicenses,
   type Application,
   type InsertApplication,
   type License,
@@ -23,6 +24,8 @@ import {
   type ChatMessage,
   type Announcement,
   type AppFile,
+  type ExeLicense,
+  type InsertExeLicense,
 } from "@shared/schema";
 import { accounts, users, type Account, type User } from "@shared/models/auth";
 
@@ -140,6 +143,15 @@ export interface IStorage {
   getResellerAccounts(): Promise<Account[]>;
   addCredits(accountId: string, credits: number): Promise<Account | undefined>;
   spendCredits(accountId: string, credits: number): Promise<Account | undefined>;
+
+  getExeLicense(id: string): Promise<ExeLicense | undefined>;
+  getExeLicenseByKey(apiKey: string): Promise<ExeLicense | undefined>;
+  getExeLicensesBySeller(sellerId: string): Promise<ExeLicense[]>;
+  createExeLicense(data: InsertExeLicense): Promise<ExeLicense>;
+  updateExeLicense(id: string, data: Partial<ExeLicense>): Promise<ExeLicense | undefined>;
+  deleteExeLicense(id: string): Promise<void>;
+  validateExeLicense(apiKey: string): Promise<{ valid: boolean; exeName?: string }>;
+  updateExeLicenseLastConnected(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -540,6 +552,48 @@ export class DatabaseStorage implements IStorage {
       .where(eq(accounts.id, accountId))
       .returning();
     return account;
+  }
+
+  async getExeLicense(id: string): Promise<ExeLicense | undefined> {
+    const [lic] = await db.select().from(exeLicenses).where(eq(exeLicenses.id, id));
+    return lic;
+  }
+
+  async getExeLicenseByKey(apiKey: string): Promise<ExeLicense | undefined> {
+    const [lic] = await db.select().from(exeLicenses).where(eq(exeLicenses.apiKey, apiKey));
+    return lic;
+  }
+
+  async getExeLicensesBySeller(sellerId: string): Promise<ExeLicense[]> {
+    return db.select().from(exeLicenses).where(eq(exeLicenses.sellerId, sellerId));
+  }
+
+  async createExeLicense(data: InsertExeLicense): Promise<ExeLicense> {
+    const apiKey = "exe_" + generateSecret().substring(0, 48);
+    const expiresAt = new Date(Date.now() + (data.daysValid || 30) * 86400000);
+    const [lic] = await db.insert(exeLicenses).values({ ...data, apiKey, expiresAt }).returning();
+    return lic;
+  }
+
+  async updateExeLicense(id: string, data: Partial<ExeLicense>): Promise<ExeLicense | undefined> {
+    const [lic] = await db.update(exeLicenses).set(data).where(eq(exeLicenses.id, id)).returning();
+    return lic;
+  }
+
+  async deleteExeLicense(id: string): Promise<void> {
+    await db.delete(exeLicenses).where(eq(exeLicenses.id, id));
+  }
+
+  async validateExeLicense(apiKey: string): Promise<{ valid: boolean; exeName?: string }> {
+    const [lic] = await db.select().from(exeLicenses).where(eq(exeLicenses.apiKey, apiKey));
+    if (!lic) return { valid: false };
+    if (lic.status !== "active") return { valid: false };
+    if (new Date() > lic.expiresAt) return { valid: false };
+    return { valid: true, exeName: lic.exeName };
+  }
+
+  async updateExeLicenseLastConnected(id: string): Promise<void> {
+    await db.update(exeLicenses).set({ lastConnectedAt: new Date() }).where(eq(exeLicenses.id, id));
   }
 }
 
